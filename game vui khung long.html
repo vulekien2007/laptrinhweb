@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Adventure - Jump & Dodge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f7f7f7;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: manipulation;
+        }
+        canvas {
+            background-color: #fff;
+            border-bottom: 2px solid #535353;
+            max-width: 100%;
+        }
+        .ui-container {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border: 2px solid #535353;
+            display: none;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ui-container">
+        <div class="text-xl font-bold text-gray-700">HI <span id="highScore">00000</span> <span id="score">00000</span></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="message-box">
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">GAME OVER</h2>
+        <p id="msg-score" class="text-lg mb-4 text-gray-600"></p>
+        <button onclick="resetGame()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-8 rounded uppercase tracking-wider transition">
+            Chơi Lại
+        </button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const highScoreElement = document.getElementById('highScore');
+        const messageBox = document.getElementById('message-box');
+        const msgScore = document.getElementById('msg-score');
+
+        let gameWidth = 800;
+        let gameHeight = 300;
+        let isGameOver = false;
+        let score = 0;
+        let highScore = localStorage.getItem('dinoHighScore') || 0;
+        let animationId;
+        
+        highScoreElement.innerText = highScore.toString().padStart(5, '0');
+
+        const player = {
+            x: 50,
+            y: 0,
+            width: 44,
+            height: 48,
+            dy: 0,
+            jumpForce: 13,
+            gravity: 0.6,
+            grounded: false,
+            draw() {
+                ctx.fillStyle = '#535353';
+                // Vẽ đầu khủng long
+                ctx.fillRect(this.x + 20, this.y, 24, 15); 
+                // Vẽ mắt
+                ctx.fillStyle = 'white';
+                ctx.fillRect(this.x + 35, this.y + 3, 4, 4);
+                // Vẽ miệng/mõm
+                ctx.fillStyle = '#535353';
+                ctx.fillRect(this.x + 38, this.y + 10, 6, 2);
+                // Vẽ cổ
+                ctx.fillRect(this.x + 20, this.y + 15, 10, 10);
+                // Vẽ thân
+                ctx.fillRect(this.x, this.y + 15, 25, 20);
+                // Vẽ đuôi
+                ctx.fillRect(this.x - 5, this.y + 15, 5, 10);
+                // Vẽ chân
+                ctx.fillRect(this.x + 5, this.y + 35, 8, 10);
+                ctx.fillRect(this.x + 15, this.y + 35, 8, 10);
+            }
+        };
+
+        let obstacles = [];
+        let obstacleTimer = 0;
+        let gameSpeed = 6;
+
+        function resize() {
+            gameWidth = Math.min(window.innerWidth - 20, 800);
+            canvas.width = gameWidth;
+            canvas.height = gameHeight;
+            player.y = gameHeight - player.height;
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        function handleJump() {
+            if (isGameOver) return;
+            if (player.grounded) {
+                player.dy = -player.jumpForce;
+                player.grounded = false;
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                handleJump();
+            }
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleJump();
+        });
+
+        function createObstacle() {
+            const type = Math.random() > 0.4 ? 'ground' : 'air';
+            
+            if (type === 'ground') {
+                // Xương rồng (Dưới đất)
+                const height = 30 + Math.random() * 30;
+                obstacles.push({
+                    type: 'ground',
+                    x: gameWidth,
+                    y: gameHeight - height,
+                    width: 20 + Math.random() * 20,
+                    height: height,
+                    color: '#535353'
+                });
+            } else {
+                // Chim/Vật cản trên không
+                // Có 2 độ cao: Thấp (phải nhảy qua) hoặc Cao (có thể đứng im)
+                const isHigh = Math.random() > 0.5;
+                const airY = isHigh ? gameHeight - 100 : gameHeight - 60;
+                obstacles.push({
+                    type: 'air',
+                    x: gameWidth,
+                    y: airY,
+                    width: 40,
+                    height: 25,
+                    color: '#757575'
+                });
+            }
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            ctx.clearRect(0, 0, gameWidth, gameHeight);
+
+            // Cập nhật người chơi
+            player.dy += player.gravity;
+            player.y += player.dy;
+
+            if (player.y + player.height > gameHeight) {
+                player.y = gameHeight - player.height;
+                player.dy = 0;
+                player.grounded = true;
+            }
+
+            player.draw();
+
+            // Quản lý chướng ngại vật
+            obstacleTimer++;
+            let spawnInterval = Math.max(40, 100 - (gameSpeed * 2));
+            if (obstacleTimer > (Math.random() * 50 + spawnInterval)) {
+                createObstacle();
+                obstacleTimer = 0;
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= gameSpeed;
+
+                ctx.fillStyle = obs.color;
+                if (obs.type === 'ground') {
+                    // Vẽ xương rồng đơn giản
+                    ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                    ctx.fillRect(obs.x - 5, obs.y + 10, 5, 10);
+                    ctx.fillRect(obs.x + obs.width, obs.y + 5, 5, 12);
+                } else {
+                    // Vẽ "chim" đơn giản
+                    ctx.beginPath();
+                    ctx.moveTo(obs.x, obs.y + 10);
+                    ctx.lineTo(obs.x + 20, obs.y);
+                    ctx.lineTo(obs.x + 40, obs.y + 10);
+                    ctx.lineTo(obs.x + 20, obs.y + 20);
+                    ctx.fill();
+                }
+
+                // Kiểm tra va chạm (Box collision với padding nhỏ để công bằng hơn)
+                const padding = 5;
+                if (
+                    player.x + padding < obs.x + obs.width &&
+                    player.x + player.width - padding > obs.x &&
+                    player.y + padding < obs.y + obs.height &&
+                    player.y + player.height - padding > obs.y
+                ) {
+                    gameOver();
+                }
+
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                    scoreElement.innerText = score.toString().padStart(5, '0');
+                    if (score % 100 === 0) gameSpeed += 0.5;
+                }
+            }
+
+            animationId = requestAnimationFrame(update);
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(animationId);
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('dinoHighScore', highScore);
+                highScoreElement.innerText = highScore.toString().padStart(5, '0');
+            }
+            msgScore.innerText = `ĐIỂM CỦA BẠN: ${score}`;
+            messageBox.style.display = 'block';
+        }
+
+        function resetGame() {
+            score = 0;
+            scoreElement.innerText = "00000";
+            gameSpeed = 6;
+            obstacles = [];
+            obstacleTimer = 0;
+            player.y = gameHeight - player.height;
+            player.dy = 0;
+            isGameOver = false;
+            messageBox.style.display = 'none';
+            update();
+        }
+
+        window.onload = update;
+    </script>
+</body>
+</html>
