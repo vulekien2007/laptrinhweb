@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Snake Game</title>
+<style>
+body {
+    background:#111;
+    color:#eee;
+    font-family:Arial;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    height:100vh;
+    margin:0;
+}
+canvas {
+    background:#000;
+    border:3px solid #2ecc71;
+}
+.hud {
+    text-align:center;
+    margin-bottom:6px;
+}
+select {
+    padding:4px 8px;
+    border-radius:6px;
+    margin:2px;
+}
+#overlay {
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.6);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    visibility:hidden;
+}
+#overlay.show { visibility:visible; }
+.modal {
+    background:#111;
+    border:2px solid white;
+    padding:20px;
+    border-radius:10px;
+    text-align:center;
+}
+button {
+    padding:8px 16px;
+    background:#2ecc71;
+    border:none;
+    border-radius:6px;
+    font-weight:bold;
+    cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div class="hud">
+    <h2>🐍 Rắn Săn Mồi</h2>
+    <div>
+        Điểm: <span id="score">0</span> |
+        🏆 Cao nhất: <span id="highScore">0</span>
+    </div>
+
+    <div>
+        Chế độ:
+        <select id="modeSelect">
+            <option value="easy">Dễ</option>
+            <option value="normal" selected>Trung bình</option>
+            <option value="hard">Khó</option>
+        </select>
+
+        Skin:
+        <select id="skinSelect">
+                <option value="classic">Classic</option>
+                <option value="ocean">Ocean</option>
+                <option value="fire">Fire</option>
+                <option value="neon">Neon</option>
+                <option value="orange">Orange</option>
+        </select>
+    </div>
+</div>
+
+<canvas id="game" width="520" height="520"></canvas>
+
+<div id="overlay">
+    <div class="modal">
+        <h2>Game Over</h2>
+        <p id="finalScore"></p>
+        <button onclick="resetGame()">Chơi lại</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const scoreEl = document.getElementById("score");
+const highScoreEl = document.getElementById("highScore");
+const overlay = document.getElementById("overlay");
+const finalScore = document.getElementById("finalScore");
+
+const modeSelect = document.getElementById("modeSelect");
+const skinSelect = document.getElementById("skinSelect");
+
+const box = 20;
+const cols = canvas.width / box;
+const rows = canvas.height / box;
+
+let snake, food, direction;
+let score = 0;
+let speed;
+let minSpeed;
+let speedUp = 8; // ăn mồi nhanh thêm chút
+let gameInterval;
+
+// 🏆 High score
+let highScore = localStorage.getItem("snakeHighScore") || 0;
+highScoreEl.innerText = highScore;
+
+// 🎮 CHẾ ĐỘ CHƠI
+const modes = {
+    easy:   { start: 220, min: 120 },
+    normal: { start: 170, min: 80 },
+    hard:   { start: 120, min: 55 }
+};
+
+// 🎨 SKIN
+const skins = {
+    classic: { head:"#7CFC00", body:"#2ecc71" },
+    ocean:   { head:"#00cfff", body:"#0077be" },
+    fire:    { head:"#ff4500", body:"#ff8c00" },
+    neon:    { head:"#e056fd", body:"#9b59b6" },
+    orange:  { head:"#ffa500", body:"#ff7f50" }
+};
+
+let currentSkin = localStorage.getItem("snakeSkin") || "classic";
+skinSelect.value = currentSkin;
+skinSelect.onchange = () => {
+    currentSkin = skinSelect.value;
+    localStorage.setItem("snakeSkin", currentSkin);
+};
+
+function resetGame() {
+    score = 0;
+    scoreEl.innerText = score;
+
+    const mode = modes[modeSelect.value];
+    speed = mode.start;
+    minSpeed = mode.min;
+
+    direction = "RIGHT";
+    snake = [{ x: 10*box, y: 10*box }];
+    placeFood();
+
+    overlay.classList.remove("show");
+    clearInterval(gameInterval);
+    gameInterval = setInterval(draw, speed);
+}
+
+function placeFood() {
+    let fx, fy;
+    do {
+        fx = Math.floor(Math.random()*cols)*box;
+        fy = Math.floor(Math.random()*rows)*box;
+    } while (snake.some(p => p.x===fx && p.y===fy));
+    food = {x:fx,y:fy};
+}
+
+document.addEventListener("keydown", e => {
+    if (e.key==="ArrowLeft" && direction!=="RIGHT") direction="LEFT";
+    if (e.key==="ArrowUp" && direction!=="DOWN") direction="UP";
+    if (e.key==="ArrowRight" && direction!=="LEFT") direction="RIGHT";
+    if (e.key==="ArrowDown" && direction!=="UP") direction="DOWN";
+});
+
+function gameOver() {
+    clearInterval(gameInterval);
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("snakeHighScore", highScore);
+        highScoreEl.innerText = highScore;
+    }
+    finalScore.innerText = "Điểm của bạn: " + score;
+    overlay.classList.add("show");
+}
+
+function drawSnake(part, index) {
+    const skin = skins[currentSkin];
+    ctx.fillStyle = index===0 ? skin.head : skin.body;
+    ctx.beginPath();
+    ctx.roundRect(part.x+1, part.y+1, box-2, box-2, 6);
+    ctx.fill();
+
+    if(index===0){
+        ctx.fillStyle="#000";
+        ctx.fillRect(part.x+6, part.y+6, 3, 3);
+        ctx.fillRect(part.x+12, part.y+6, 3, 3);
+    }
+}
+
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    snake.forEach(drawSnake);
+
+    ctx.fillStyle="red";
+    ctx.beginPath();
+    ctx.arc(food.x+10, food.y+10, 8, 0, Math.PI*2);
+    ctx.fill();
+
+    let headX=snake[0].x, headY=snake[0].y;
+    if(direction==="LEFT") headX-=box;
+    if(direction==="UP") headY-=box;
+    if(direction==="RIGHT") headX+=box;
+    if(direction==="DOWN") headY+=box;
+
+    if(headX===food.x && headY===food.y){
+        score++;
+        scoreEl.innerText=score;
+        placeFood();
+
+        // ⚡ ăn mồi → nhanh hơn chút
+        if (speed > minSpeed) {
+            speed -= speedUp;
+            clearInterval(gameInterval);
+            gameInterval = setInterval(draw, speed);
+        }
+    } else snake.pop();
+
+    const newHead={x:headX,y:headY};
+    if(headX<0||headY<0||headX>=canvas.width||headY>=canvas.height||
+       snake.some(p=>p.x===newHead.x&&p.y===newHead.y)){
+        gameOver(); return;
+    }
+    snake.unshift(newHead);
+}
+
+resetGame();
+</script>
+</body>
+</html>

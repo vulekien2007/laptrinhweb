@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Pulse Drift</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#0a0a1a;height:100%;width:100%;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;}
+  #game{display:block;width:100vw;height:100vh;background:linear-gradient(#0a0a2a,#1a0a2a);}
+  #hud{position:fixed;top:0;left:0;width:100%;text-align:center;color:#fff;pointer-events:none;}
+  #score{margin-top:14px;font-size:32px;font-weight:bold;text-shadow:0 0 10px #0ff,0 0 20px #0ff;letter-spacing:2px;}
+  #subhud{display:flex;justify-content:center;gap:18px;margin-top:4px;font-size:14px;color:#9ad;opacity:0.9;}
+  #coinRow{display:flex;align-items:center;gap:4px;color:#ffd23f;text-shadow:0 0 8px #ffb300;}
+  #diffTag{color:#9ad;}
+  #comboEl{position:fixed;left:50%;top:32%;transform:translate(-50%,-50%) scale(0.6);color:#ffd23f;font-size:26px;font-weight:900;
+    text-shadow:0 0 12px #ffb300;opacity:0;pointer-events:none;transition:opacity 0.15s, transform 0.15s;}
+  #comboEl.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #powerBar{position:fixed;top:74px;left:50%;transform:translateX(-50%);width:140px;height:8px;border-radius:6px;
+    background:rgba(255,255,255,0.15);overflow:hidden;opacity:0;transition:opacity 0.2s;}
+  #powerBar.show{opacity:1;}
+  #powerFill{height:100%;background:linear-gradient(90deg,#ffd23f,#ff8a00);width:100%;}
+  #shieldIcon{position:fixed;top:14px;right:18px;font-size:24px;opacity:0;transition:opacity 0.2s;text-shadow:0 0 10px #39c2ff;}
+  #shieldIcon.show{opacity:1;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(5,5,20,0.0);transition:background 0.5s;color:#fff;text-align:center;padding:0 20px;box-sizing:border-box;
+    overflow-y:auto;}
+  #overlay.dark{background:rgba(5,5,20,0.78);}
+  .title{font-size:42px;font-weight:900;letter-spacing:3px;color:#0ff;text-shadow:0 0 15px #0ff,0 0 35px #0ff;}
+  .sub{margin-top:14px;font-size:18px;color:#cde;opacity:0.9;}
+  .gameover{font-size:50px;font-weight:900;color:#ff2d6b;text-shadow:0 0 15px #ff2d6b,0 0 40px #ff2d6b;letter-spacing:3px;}
+  .pulse{animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  #scoreOver{margin-top:12px;font-size:20px;color:#fff;}
+  #coinOver{margin-top:4px;font-size:16px;color:#ffd23f;}
+  #newBest{margin-top:8px;font-size:15px;color:#39ff7a;text-shadow:0 0 10px #39ff7a;font-weight:bold;}
+  #totalCoinsRow{margin-top:18px;font-size:14px;color:#ffd23f;opacity:0.85;}
+  .flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;}
+
+  .menuBtns{display:flex;flex-direction:column;gap:10px;align-items:center;margin-top:18px;pointer-events:auto;}
+  .menuRow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;pointer-events:auto;}
+  .btn{pointer-events:auto;cursor:pointer;border:2px solid #0ff;color:#0ff;background:rgba(0,255,255,0.07);
+    padding:10px 18px;border-radius:10px;font-weight:bold;font-size:15px;letter-spacing:1px;
+    text-shadow:0 0 8px #0ff;transition:transform 0.15s, background 0.15s;user-select:none;}
+  .btn:active{transform:scale(0.95);}
+  .btn.secondary{border-color:#9ad;color:#9ad;text-shadow:0 0 8px #9ad;background:rgba(150,170,221,0.07);}
+  .btn.gold{border-color:#ffd23f;color:#ffd23f;text-shadow:0 0 8px #ffb300;background:rgba(255,210,63,0.07);}
+  .btn.locked{opacity:0.45;border-color:#666;color:#999;text-shadow:none;}
+  .btn.selected{background:rgba(0,255,255,0.25);}
+
+  .diffEasy{border-color:#39ff7a;color:#39ff7a;text-shadow:0 0 8px #39ff7a;background:rgba(57,255,122,0.07);}
+  .diffMed{border-color:#ffd23f;color:#ffd23f;text-shadow:0 0 8px #ffb300;background:rgba(255,210,63,0.07);}
+  .diffHard{border-color:#ff2d6b;color:#ff2d6b;text-shadow:0 0 8px #ff2d6b;background:rgba(255,45,107,0.07);}
+  .diffEasy.selected{background:rgba(57,255,122,0.3);}
+  .diffMed.selected{background:rgba(255,210,63,0.3);}
+  .diffHard.selected{background:rgba(255,45,107,0.3);}
+
+  #skinGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;max-width:360px;pointer-events:auto;}
+  .skinCard{cursor:pointer;border:2px solid #444;border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;
+    align-items:center;gap:4px;background:rgba(255,255,255,0.04);transition:transform 0.15s;}
+  .skinCard:active{transform:scale(0.93);}
+  .skinCard.owned{border-color:#39ff7a;}
+  .skinCard.equipped{border-color:#0ff;background:rgba(0,255,255,0.12);box-shadow:0 0 12px rgba(0,255,255,0.4);}
+  .skinCard svg{width:34px;height:34px;}
+  .skinName{font-size:11px;color:#fff;}
+  .skinPrice{font-size:11px;color:#ffd23f;}
+  .skinPrice.free{color:#39ff7a;}
+  .smallHint{font-size:12px;color:#789;margin-top:10px;max-width:320px;}
+  .panelTitle{font-size:20px;color:#0ff;text-shadow:0 0 10px #0ff;font-weight:900;letter-spacing:1px;margin-top:4px;}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="flash" id="flash"></div>
+<div id="hud">
+  <div id="score">0</div>
+  <div id="subhud">
+    <div id="best">Kỷ lục: 0</div>
+    <div id="coinRow">● <span id="coins">0</span></div>
+    <div id="diffTag">Độ khó: Trung bình</div>
+  </div>
+</div>
+<div id="comboEl">Combo x2!</div>
+<div id="powerBar"><div id="powerFill"></div></div>
+<div id="shieldIcon">🛡</div>
+<div id="overlay">
+  <div id="ovContent">
+    <div class="title">PULSE DRIFT</div>
+    <div class="sub pulse">Chạm để chơi</div>
+    <div id="totalCoinsRow">● Tổng xu đã nhặt: 0</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const ovContent = document.getElementById('ovContent');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const coinsEl = document.getElementById('coins');
+const diffTag = document.getElementById('diffTag');
+const comboEl = document.getElementById('comboEl');
+const powerBar = document.getElementById('powerBar');
+const powerFill = document.getElementById('powerFill');
+const shieldIcon = document.getElementById('shieldIcon');
+const flashEl = document.getElementById('flash');
+
+let W, H;
+function resize(){
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const LANES = 3;
+let laneWidth, roadLeft, roadRight;
+function computeRoad(){
+  const roadW = Math.min(W*0.8, 520);
+  roadLeft = (W - roadW)/2;
+  roadRight = roadLeft + roadW;
+  laneWidth = roadW / LANES;
+}
+computeRoad();
+window.addEventListener('resize', computeRoad);
+
+function laneX(i){ return roadLeft + laneWidth*i + laneWidth/2; }
+
+// ---- Audio (simple WebAudio beeps, no external files) ----
+let audioCtx = null;
+function beep(freq, dur, type, vol){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type||'sine';
+    o.frequency.value = freq;
+    g.gain.value = vol||0.08;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  }catch(e){}
+}
+function sfxCoin(){ beep(880, 0.12, 'triangle', 0.07); beep(1320, 0.1, 'triangle', 0.05); }
+function sfxCrash(){ beep(120, 0.35, 'sawtooth', 0.12); }
+function sfxPower(){ beep(660,0.1,'square',0.06); beep(990,0.15,'square',0.06); }
+function sfxShield(){ beep(440,0.08,'sine',0.06); beep(660,0.12,'sine',0.06); }
+function sfxClick(){ beep(520,0.05,'square',0.04); }
+function sfxBuy(){ beep(700,0.08,'triangle',0.06); beep(1050,0.12,'triangle',0.06); }
+function sfxLocked(){ beep(160,0.12,'sawtooth',0.05); }
+
+// ---- Difficulty ----
+const DIFFICULTIES = {
+  easy:   { label:'Dễ',        baseSpeed:4.5, spawnIntervalStart:90, spawnIntervalMin:48, rampDiv:50, color:'#39ff7a' },
+  medium: { label:'Trung bình', baseSpeed:6,   spawnIntervalStart:70, spawnIntervalMin:34, rampDiv:30, color:'#ffd23f' },
+  hard:   { label:'Khó',        baseSpeed:8,   spawnIntervalStart:54, spawnIntervalMin:24, rampDiv:20, color:'#ff2d6b' }
+};
+let difficulty = localStorage.getItem('neonRushDifficulty') || 'medium';
+if(!DIFFICULTIES[difficulty]) difficulty = 'medium';
+function applyDifficultyTag(){
+  const d = DIFFICULTIES[difficulty];
+  diffTag.textContent = 'Độ khó: ' + d.label;
+  diffTag.style.color = d.color;
+  diffTag.style.textShadow = '0 0 6px ' + d.color;
+}
+applyDifficultyTag();
+
+// ---- Skins ----
+// price: coins required (cumulative total coins, not spent... we DO spend them)
+const SKINS = [
+  { id:'classic',  name:'Cổ điển',  price:0,    colors:['#39ff7a','#1fae53'] },
+  { id:'azure',    name:'Lam Ngọc', price:30,   colors:['#39c2ff','#1f7fae'] },
+  { id:'violet',   name:'Tím Mộng', price:60,   colors:['#b25bff','#7a2fcf'] },
+  { id:'magma',    name:'Dung Nham',price:100,  colors:['#ff6a2d','#c2351f'] },
+  { id:'rose',     name:'Hồng Neon',price:150,  colors:['#ff2d8a','#c21f5e'] },
+  { id:'gold',     name:'Hoàng Kim',price:220,  colors:['#ffd23f','#ff8a00'] },
+  { id:'ghost',    name:'Bóng Ma',  price:300,  colors:['#dfe9ff','#8fa6cf'] },
+  { id:'toxic',    name:'Độc Tố',   price:400,  colors:['#c6ff39','#7aae1f'] },
+  { id:'prism',    name:'Lăng Kính',price:550,  colors:['#ff2d6b','#39c2ff','#ffd23f'], rainbow:true }
+];
+let ownedSkins = JSON.parse(localStorage.getItem('neonRushOwnedSkins') || '["classic"]');
+let equippedSkin = localStorage.getItem('neonRushEquippedSkin') || 'classic';
+if(!ownedSkins.includes(equippedSkin)) equippedSkin = 'classic';
+function saveSkins(){
+  localStorage.setItem('neonRushOwnedSkins', JSON.stringify(ownedSkins));
+  localStorage.setItem('neonRushEquippedSkin', equippedSkin);
+}
+function getSkin(id){ return SKINS.find(s=>s.id===id) || SKINS[0]; }
+
+// ---- State ----
+let state = 'idle'; // idle | playing | gameover | difficulty | shop
+let playerLane = 1;
+let targetX = laneX(1);
+let playerX = laneX(1);
+let playerY;
+let obstacles = [];
+let coinsArr = [];
+let powerups = [];
+let particles = [];
+let floatTexts = [];
+let speed = 6;
+let baseSpeed = 6;
+let spawnTimer = 0;
+let spawnInterval = 70;
+let coinSpawnTimer = 0;
+let powerSpawnTimer = 0;
+let distScore = 0;
+let displayScore = 0;
+let coinCount = 0;
+let totalCoins = parseInt(localStorage.getItem('neonRushTotalCoins')||'0',10) || 0;
+let bestByDiff = JSON.parse(localStorage.getItem('neonRushBestByDiff') || '{}');
+let best = bestByDiff[difficulty] || 0;
+bestEl.textContent = 'Kỷ lục: ' + best;
+
+let comboCount = 0;
+let comboTimer = 0;
+let magnetT = 0;
+let shieldOn = false;
+
+let frame = 0;
+let roadOffset = 0;
+let shakeT = 0;
+let flashT = 0;
+
+function resetGame(){
+  computeRoad();
+  const d = DIFFICULTIES[difficulty];
+  baseSpeed = d.baseSpeed;
+  playerLane = 1;
+  targetX = laneX(1);
+  playerX = laneX(1);
+  playerY = H*0.78;
+  obstacles = [];
+  coinsArr = [];
+  powerups = [];
+  particles = [];
+  floatTexts = [];
+  speed = baseSpeed;
+  spawnTimer = 0;
+  spawnInterval = d.spawnIntervalStart;
+  coinSpawnTimer = 0;
+  powerSpawnTimer = 0;
+  distScore = 0;
+  displayScore = 0;
+  coinCount = 0;
+  comboCount = 0;
+  comboTimer = 0;
+  magnetT = 0;
+  shieldOn = false;
+  frame = 0;
+  roadOffset = 0;
+  shakeT = 0;
+  scoreEl.textContent = '0';
+  coinsEl.textContent = '0';
+  powerBar.classList.remove('show');
+  shieldIcon.classList.remove('show');
+  best = bestByDiff[difficulty] || 0;
+  bestEl.textContent = 'Kỷ lục: ' + best;
+  applyDifficultyTag();
+}
+resetGame();
+
+function startGame(){
+  resetGame();
+  state = 'playing';
+  overlay.classList.remove('dark');
+  overlay.style.display = 'none';
+}
+
+function endGame(){
+  state = 'gameover';
+  let isNewBest = false;
+  if(displayScore > best){ best = displayScore; bestByDiff[difficulty] = best; localStorage.setItem('neonRushBestByDiff', JSON.stringify(bestByDiff)); isNewBest = true; }
+  totalCoins += coinCount;
+  localStorage.setItem('neonRushTotalCoins', totalCoins);
+  bestEl.textContent = 'Kỷ lục: ' + best;
+  coinsEl.textContent = coinCount;
+  renderGameOverScreen(isNewBest);
+  overlay.style.display = 'flex';
+  requestAnimationFrame(()=> overlay.classList.add('dark'));
+}
+
+function renderGameOverScreen(isNewBest){
+  ovContent.innerHTML = `<div class="gameover">GAME OVER</div>
+    <div id="scoreOver">Điểm của bạn: ${displayScore}</div>
+    <div id="coinOver">● Xu nhặt được: ${coinCount}</div>
+    ${isNewBest ? '<div id="newBest">★ Kỷ lục mới! ★</div>' : ''}
+    <div id="totalCoinsRow">● Tổng xu: ${totalCoins}</div>
+    <div class="menuBtns">
+      <div class="btn gold" id="btnRetry">Chơi lại</div>
+      <div class="menuRow">
+        <div class="btn secondary" id="btnGoDiff">Độ khó</div>
+        <div class="btn secondary" id="btnGoShop">Cửa hàng Skin</div>
+      </div>
+    </div>`;
+  document.getElementById('btnRetry').onclick = (e)=>{ e.stopPropagation(); sfxClick(); startGame(); };
+  document.getElementById('btnGoDiff').onclick = (e)=>{ e.stopPropagation(); sfxClick(); showDifficultyMenu(); };
+  document.getElementById('btnGoShop').onclick = (e)=>{ e.stopPropagation(); sfxClick(); showShopMenu(); };
+}
+
+function showIdleMenu(){
+  state = 'idle';
+  overlay.classList.add('dark');
+  overlay.style.display = 'flex';
+  const d = DIFFICULTIES[difficulty];
+  ovContent.innerHTML = `<div class="title">PULSE DRIFT</div>
+    <div class="sub">Chạm vào nút để bắt đầu</div>
+    <div id="totalCoinsRow">● Tổng xu đã nhặt: ${totalCoins}</div>
+    <div class="menuBtns">
+      <div class="btn gold" id="btnPlay">▶ Chơi (${d.label})</div>
+      <div class="menuRow">
+        <div class="btn secondary" id="btnGoDiff">Chọn độ khó</div>
+        <div class="btn secondary" id="btnGoShop">Cửa hàng Skin</div>
+      </div>
+    </div>`;
+  document.getElementById('btnPlay').onclick = (e)=>{ e.stopPropagation(); sfxClick(); startGame(); };
+  document.getElementById('btnGoDiff').onclick = (e)=>{ e.stopPropagation(); sfxClick(); showDifficultyMenu(); };
+  document.getElementById('btnGoShop').onclick = (e)=>{ e.stopPropagation(); sfxClick(); showShopMenu(); };
+}
+
+function showDifficultyMenu(){
+  state = 'difficulty';
+  overlay.classList.add('dark');
+  overlay.style.display = 'flex';
+  const rows = Object.keys(DIFFICULTIES).map(key=>{
+    const d = DIFFICULTIES[key];
+    const cls = key==='easy' ? 'diffEasy' : key==='medium' ? 'diffMed' : 'diffHard';
+    const sel = key===difficulty ? ' selected' : '';
+    const b = bestByDiff[key] || 0;
+    return `<div class="btn ${cls}${sel}" data-diff="${key}" style="width:220px;">${d.label} ${key===difficulty?'✓':''}<div style="font-size:11px;opacity:0.8;margin-top:2px;">Kỷ lục: ${b}</div></div>`;
+  }).join('');
+  ovContent.innerHTML = `<div class="panelTitle">CHỌN ĐỘ KHÓ</div>
+    <div class="menuBtns">${rows}</div>
+    <div class="btn secondary" id="btnBack" style="margin-top:18px;">← Quay lại</div>`;
+  document.querySelectorAll('[data-diff]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      sfxClick();
+      difficulty = el.getAttribute('data-diff');
+      localStorage.setItem('neonRushDifficulty', difficulty);
+      showDifficultyMenu();
+    };
+  });
+  document.getElementById('btnBack').onclick = (e)=>{ e.stopPropagation(); sfxClick(); applyDifficultyTag(); showIdleMenu(); };
+}
+
+function skinSVG(skin, size){
+  size = size || 34;
+  const fillId = 'g_' + skin.id;
+  let fillDef, fillAttr;
+  if(skin.rainbow){
+    fillDef = `<linearGradient id="${fillId}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${skin.colors[0]}"/>
+      <stop offset="50%" stop-color="${skin.colors[1]}"/>
+      <stop offset="100%" stop-color="${skin.colors[2]}"/>
+    </linearGradient>`;
+    fillAttr = `url(#${fillId})`;
+  } else {
+    fillDef = `<linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${skin.colors[0]}"/>
+      <stop offset="100%" stop-color="${skin.colors[1]}"/>
+    </linearGradient>`;
+    fillAttr = `url(#${fillId})`;
+  }
+  return `<svg viewBox="0 0 40 40" width="${size}" height="${size}"><defs>${fillDef}</defs>
+    <polygon points="20,4 32,32 20,24 8,32" fill="${fillAttr}" stroke="${skin.colors[0]}" stroke-width="1"/></svg>`;
+}
+
+function showShopMenu(){
+  state = 'shop';
+  overlay.classList.add('dark');
+  overlay.style.display = 'flex';
+  const cards = SKINS.map(s=>{
+    const owned = ownedSkins.includes(s.id);
+    const equipped = equippedSkin === s.id;
+    const priceLabel = s.price === 0 ? 'Miễn phí' : ('● ' + s.price);
+    const cls = 'skinCard' + (owned?' owned':'') + (equipped?' equipped':'');
+    return `<div class="${cls}" data-skin="${s.id}">
+      ${skinSVG(s)}
+      <div class="skinName">${s.name}</div>
+      <div class="skinPrice ${owned?'free':''}">${owned ? (equipped?'Đang dùng':'Đã sở hữu') : priceLabel}</div>
+    </div>`;
+  }).join('');
+  ovContent.innerHTML = `<div class="panelTitle">CỬA HÀNG SKIN</div>
+    <div id="totalCoinsRow">● Tổng xu: ${totalCoins}</div>
+    <div id="skinGrid">${cards}</div>
+    <div class="smallHint">Skin càng đẹp càng tốn nhiều xu — nhặt xu khi chơi để mở khóa!</div>
+    <div class="btn secondary" id="btnBack" style="margin-top:16px;">← Quay lại</div>`;
+  document.querySelectorAll('.skinCard').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      const id = el.getAttribute('data-skin');
+      const skin = getSkin(id);
+      if(ownedSkins.includes(id)){
+        sfxClick();
+        equippedSkin = id;
+        saveSkins();
+        showShopMenu();
+      } else {
+        if(totalCoins >= skin.price){
+          sfxBuy();
+          totalCoins -= skin.price;
+          localStorage.setItem('neonRushTotalCoins', totalCoins);
+          ownedSkins.push(id);
+          equippedSkin = id;
+          saveSkins();
+          showShopMenu();
+        } else {
+          sfxLocked();
+          el.style.borderColor = '#ff2d6b';
+          setTimeout(()=>{ el.style.borderColor = ''; }, 300);
+        }
+      }
+    };
+  });
+  document.getElementById('btnBack').onclick = (e)=>{ e.stopPropagation(); sfxClick(); showIdleMenu(); };
+}
+
+function spawnObstacle(){
+  const types = ['block','block','spike'];
+  let lane = Math.floor(Math.random()*LANES);
+  const blockedNearTop = [0,1,2].filter(l => obstacles.some(o => o.lane===l && o.y < 40 && o.y > -120));
+  if(blockedNearTop.length >= LANES-1){
+    const free = [0,1,2].find(l => !blockedNearTop.includes(l));
+    if(free !== undefined) lane = free;
+  }
+  obstacles.push({ lane: lane, y: -80, type: types[Math.floor(Math.random()*types.length)], hit: false });
+}
+
+function spawnCoinRun(){
+  const lane = Math.floor(Math.random()*LANES);
+  const count = 3 + Math.floor(Math.random()*3);
+  for(let i=0;i<count;i++){
+    coinsArr.push({ lane, y: -80 - i*46, taken:false, spin: Math.random()*Math.PI*2 });
+  }
+}
+
+function spawnPowerup(){
+  const lane = Math.floor(Math.random()*LANES);
+  const type = Math.random() < 0.5 ? 'magnet' : 'shield';
+  powerups.push({ lane, y:-80, type, taken:false });
+}
+
+function addParticles(x,y,color,n){
+  for(let i=0;i<n;i++){
+    particles.push({ x, y, vx:(Math.random()-0.5)*8, vy:(Math.random()-0.5)*8-2, life:30+Math.random()*20, color });
+  }
+}
+function addFloatText(x,y,text,color){ floatTexts.push({ x, y, text, color, life:40 }); }
+function triggerFlash(){ flashT = 8; }
+
+function update(){
+  frame++;
+  if(state === 'playing'){
+    const d = DIFFICULTIES[difficulty];
+    speed = baseSpeed + Math.min(distScore/80, 9);
+    spawnInterval = Math.max(d.spawnIntervalMin, d.spawnIntervalStart - distScore/d.rampDiv);
+    roadOffset = (roadOffset + speed*2) % 60;
+    playerX += (targetX - playerX) * 0.25;
+
+    spawnTimer++;
+    if(spawnTimer > spawnInterval){ spawnTimer = 0; spawnObstacle(); }
+
+    coinSpawnTimer++;
+    if(coinSpawnTimer > 130){ coinSpawnTimer = -Math.floor(Math.random()*40); spawnCoinRun(); }
+
+    powerSpawnTimer++;
+    if(powerSpawnTimer > 480){ powerSpawnTimer = -Math.floor(Math.random()*200); spawnPowerup(); }
+
+    for(let o of obstacles) o.y += speed;
+    obstacles = obstacles.filter(o => o.y < H + 100);
+
+    for(let c of coinsArr){
+      c.y += speed;
+      c.spin += 0.15;
+      if(magnetT > 0 && !c.taken){
+        const px = laneX(playerLane);
+        const dyAbs = Math.abs(c.y - playerY);
+        if(dyAbs < 260){
+          if(c.magX===undefined) c.magX = laneX(c.lane);
+          c.magX += (px - c.magX) * 0.18;
+        }
+      }
+    }
+    coinsArr = coinsArr.filter(c => c.y < H + 100 && !c.taken);
+
+    for(let p of powerups) p.y += speed;
+    powerups = powerups.filter(p => p.y < H + 100 && !p.taken);
+
+    for(let o of obstacles){
+      if(o.hit) continue;
+      const ox = laneX(o.lane);
+      const oy = o.y;
+      const dx = Math.abs(ox - playerX);
+      const dy = Math.abs(oy - playerY);
+      if(dy < 38 && dx < 34){
+        if(shieldOn){
+          shieldOn = false;
+          shieldIcon.classList.remove('show');
+          o.hit = true;
+          shakeT = 10;
+          triggerFlash();
+          addParticles(ox, oy, '#39c2ff', 18);
+          addFloatText(playerX, playerY-40, 'Khiên đỡ!', '#39c2ff');
+          sfxShield();
+        } else {
+          o.hit = true;
+          shakeT = 16;
+          triggerFlash();
+          addParticles(playerX, playerY, '#ff2d6b', 26);
+          sfxCrash();
+          endGame();
+        }
+      }
+    }
+
+    for(let c of coinsArr){
+      if(c.taken) continue;
+      const cx = c.magX !== undefined ? c.magX : laneX(c.lane);
+      const dx = Math.abs(cx - playerX);
+      const dy = Math.abs(c.y - playerY);
+      const reach = magnetT > 0 ? 60 : 30;
+      if(dy < (magnetT>0?60:34) && dx < reach){
+        c.taken = true;
+        coinCount++;
+        comboCount++;
+        comboTimer = 60;
+        const bonus = comboCount >= 5 ? 5 : (comboCount >= 3 ? 3 : 1);
+        distScore += bonus*4;
+        coinsEl.textContent = coinCount;
+        addParticles(cx, c.y, '#ffd23f', 10);
+        sfxCoin();
+        if(comboCount >= 2){
+          comboEl.textContent = 'Combo x' + comboCount + '!';
+          comboEl.classList.remove('show'); void comboEl.offsetWidth; comboEl.classList.add('show');
+        }
+      }
+    }
+
+    for(let pu of powerups){
+      if(pu.taken) continue;
+      const px = laneX(pu.lane);
+      const dx = Math.abs(px - playerX);
+      const dy = Math.abs(pu.y - playerY);
+      if(dy < 38 && dx < 34){
+        pu.taken = true;
+        sfxPower();
+        if(pu.type === 'magnet'){
+          magnetT = 360;
+          powerBar.classList.add('show');
+          addFloatText(playerX, playerY-40, 'NAM CHÂM!', '#ff8a00');
+        } else {
+          shieldOn = true;
+          shieldIcon.classList.add('show');
+          addFloatText(playerX, playerY-40, 'KHIÊN!', '#39c2ff');
+        }
+      }
+    }
+
+    if(comboTimer > 0){ comboTimer--; if(comboTimer===0){ comboCount = 0; comboEl.classList.remove('show'); } }
+
+    if(magnetT > 0){
+      magnetT--;
+      powerFill.style.width = (magnetT/360*100) + '%';
+      if(magnetT === 0) powerBar.classList.remove('show');
+    }
+
+    distScore += 1;
+    displayScore = Math.floor(distScore/10);
+    scoreEl.textContent = displayScore;
+  }
+
+  for(let p of particles){ p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life--; }
+  particles = particles.filter(p=>p.life>0);
+
+  for(let t of floatTexts){ t.y -= 0.6; t.life--; }
+  floatTexts = floatTexts.filter(t=>t.life>0);
+
+  if(shakeT>0) shakeT--;
+  if(flashT>0){ flashT--; flashEl.style.opacity = (flashT/8*0.35).toFixed(2); }
+  else { flashEl.style.opacity = 0; }
+}
+
+function drawRoad(){
+  ctx.fillStyle = '#11102a';
+  ctx.fillRect(roadLeft, 0, roadRight-roadLeft, H);
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#0ff';
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.moveTo(roadLeft,0); ctx.lineTo(roadLeft,H);
+  ctx.moveTo(roadRight,0); ctx.lineTo(roadRight,H);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(120,200,255,0.35)';
+  ctx.lineWidth = 2;
+  for(let i=1;i<LANES;i++){
+    const x = roadLeft + laneWidth*i;
+    ctx.beginPath();
+    for(let y = -60 + roadOffset; y < H; y += 60){ ctx.moveTo(x, y); ctx.lineTo(x, y+30); }
+    ctx.stroke();
+  }
+}
+
+function drawPlayer(){
+  if(state === 'gameover') return;
+  const skin = getSkin(equippedSkin);
+  let mainColor = skin.colors[0];
+  if(skin.rainbow){
+    const hue = (frame*4) % 360;
+    mainColor = 'hsl(' + hue + ',100%,60%)';
+  }
+  ctx.save();
+  ctx.translate(playerX, playerY);
+  if(shieldOn){
+    ctx.save();
+    ctx.strokeStyle = '#39c2ff';
+    ctx.shadowColor = '#39c2ff';
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(0,-2, 34, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowColor = mainColor;
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = mainColor;
+  ctx.beginPath();
+  ctx.moveTo(0,-26);
+  ctx.lineTo(20,18);
+  ctx.lineTo(0,8);
+  ctx.lineTo(-20,18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawObstacles(){
+  for(let o of obstacles){
+    if(o.hit) continue;
+    const x = laneX(o.lane);
+    const y = o.y;
+    ctx.save();
+    ctx.translate(x,y);
+    if(o.type === 'block'){
+      ctx.shadowColor = '#ff2d6b';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = '#ff2d6b';
+      ctx.fillRect(-26,-22,52,44);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#fff';
+      ctx.globalAlpha = 0.3;
+      ctx.strokeRect(-26,-22,52,44);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.shadowColor = '#ffb52d';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = '#ffb52d';
+      ctx.beginPath();
+      ctx.moveTo(0,-28);
+      ctx.lineTo(26,22);
+      ctx.lineTo(-26,22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+}
+
+function drawCoins(){
+  for(let c of coinsArr){
+    if(c.taken) continue;
+    const x = c.magX !== undefined ? c.magX : laneX(c.lane);
+    const y = c.y;
+    const squish = Math.abs(Math.cos(c.spin));
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.shadowColor = '#ffd23f';
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.ellipse(0,0, 12*squish+3, 14, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff8d8';
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.ellipse(0,0, (12*squish+3)*0.5, 7, 0,0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+
+function drawPowerups(){
+  for(let pu of powerups){
+    if(pu.taken) continue;
+    const x = laneX(pu.lane);
+    const y = pu.y;
+    ctx.save();
+    ctx.translate(x,y);
+    const bob = Math.sin(frame*0.1)*4;
+    ctx.translate(0,bob);
+    if(pu.type === 'magnet'){
+      ctx.shadowColor = '#ff8a00';
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#ff8a00';
+      ctx.beginPath();
+      ctx.arc(0,0,18,0.2*Math.PI,1.8*Math.PI);
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('M', 0, 1);
+    } else {
+      ctx.shadowColor = '#39c2ff';
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = '#39c2ff';
+      ctx.beginPath();
+      ctx.moveTo(0,-18);
+      ctx.quadraticCurveTo(18,-10,16,6);
+      ctx.quadraticCurveTo(14,18,0,22);
+      ctx.quadraticCurveTo(-14,18,-16,6);
+      ctx.quadraticCurveTo(-18,-10,0,-18);
+      ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.font='bold 14px Arial';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('S',0,2);
+    }
+    ctx.restore();
+  }
+}
+
+function drawParticles(){
+  for(let p of particles){
+    ctx.globalAlpha = Math.max(p.life/40,0);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,3,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFloatTexts(){
+  for(let t of floatTexts){
+    ctx.globalAlpha = Math.max(t.life/40,0);
+    ctx.fillStyle = t.color;
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = t.color;
+    ctx.shadowBlur = 8;
+    ctx.fillText(t.text, t.x, t.y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if(shakeT>0){ ctx.translate((Math.random()-0.5)*shakeT, (Math.random()-0.5)*shakeT); }
+  drawRoad();
+  drawCoins();
+  drawPowerups();
+  drawObstacles();
+  drawPlayer();
+  drawParticles();
+  drawFloatTexts();
+  ctx.restore();
+}
+
+function loop(){ update(); render(); requestAnimationFrame(loop); }
+loop();
+
+function moveLeft(){ if(state !== 'playing') return; playerLane = Math.max(0, playerLane-1); targetX = laneX(playerLane); }
+function moveRight(){ if(state !== 'playing') return; playerLane = Math.min(LANES-1, playerLane+1); targetX = laneX(playerLane); }
+
+let touchStartX = null, touchStartY = null, touchStartTime = 0;
+const SWIPE_THRESHOLD = 30;
+
+canvas.addEventListener('touchstart', e=>{
+  const t = e.changedTouches[0];
+  touchStartX = t.clientX; touchStartY = t.clientY; touchStartTime = Date.now();
+}, {passive:true});
+
+canvas.addEventListener('touchend', e=>{
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  const dt = Date.now() - touchStartTime;
+  if(Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)){
+    if(dx < 0) moveLeft(); else moveRight();
+  } else if(dt < 300 && Math.abs(dx) < 12 && Math.abs(dy) < 12){
+    handleTap();
+  }
+}, {passive:true});
+
+let mouseDownX = null, mouseDownY = null, mouseDownTime=0;
+canvas.addEventListener('mousedown', e=>{ mouseDownX = e.clientX; mouseDownY = e.clientY; mouseDownTime = Date.now(); });
+canvas.addEventListener('mouseup', e=>{
+  const dx = e.clientX - mouseDownX;
+  const dy = e.clientY - mouseDownY;
+  const dt = Date.now() - mouseDownTime;
+  if(Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)){
+    if(dx < 0) moveLeft(); else moveRight();
+  } else if(dt < 300){
+    handleTap();
+  }
+});
+
+window.addEventListener('keydown', e=>{
+  if(e.key === 'ArrowLeft') moveLeft();
+  if(e.key === 'ArrowRight') moveRight();
+  if(e.key === ' ') handleTap();
+});
+
+overlay.addEventListener('click', (e)=>{
+  if(e.target === overlay) handleTap();
+});
+overlay.addEventListener('touchstart', (e)=>{
+  if(e.target === overlay){ e.preventDefault(); handleTap(); }
+}, {passive:false});
+
+function handleTap(){
+  if(state === 'idle'){ startGame(); }
+  else if(state === 'gameover'){ startGame(); }
+}
+
+showIdleMenu();
+</script>
+</body>
+</html>
